@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as arrays from '../../../../base/common/arrays.js';
-import { raceCancellationError } from '../../../../base/common/async.js';
+import { disposableTimeout, raceCancellationError } from '../../../../base/common/async.js';
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { Emitter } from '../../../../base/common/event.js';
@@ -333,7 +333,11 @@ export class SearchService extends Disposable implements ISearchService {
 			// Extension status changed — check whether activation completed
 			store.add(this.extensionService.onDidChangeExtensionsStatus(() => {
 				if (this.extensionService.activationEventIsDone(activationEvent)) {
-					done(this.getSearchProvider(type).get(scheme));
+					// Remote EH: $registerFileSearchProvider is fire-and-forget and may still be
+					// in-flight when activationEventIsDone flips. Give it a bounded window before
+					// resolving with undefined. The _onDidRegisterProvider listener above wins
+					// immediately if the provider arrives first.
+					store.add(disposableTimeout(() => done(this.getSearchProvider(type).get(scheme)), 500));
 				}
 			}));
 		});
